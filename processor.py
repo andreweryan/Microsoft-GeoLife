@@ -11,21 +11,44 @@ warnings.filterwarnings("ignore")
 
 # data dowload: https://download.microsoft.com/download/F/4/8/F4894AA5-FDBC-481E-9285-D5F8C4C4F039/Geolife%20Trajectories%201.3.zip
 
+
 def process_data(user_id, path, df_list):
-    df = pd.read_csv(path, skiprows=6, names=['latitude', 'longitude', 'zero', 'altitude', 'days_since', 'date_str', 'time_str'])
-    df = df[df['latitude'].between(-90, 90) & df['longitude'].between(-180, 180)]
-    df.drop(['zero', 'days_since'], axis=1, inplace=True)
-    df['timestamp'] = pd.to_datetime(df['date_str'] + ' ' + df['time_str'])
-    df['user_id'] = user_id
+    df = pd.read_csv(
+        path,
+        skiprows=6,
+        names=[
+            "latitude",
+            "longitude",
+            "zero",
+            "altitude",
+            "days_since",
+            "date_str",
+            "time_str",
+        ],
+    )
+    df = df[df["latitude"].between(-90, 90) & df["longitude"].between(-180, 180)]
+    df.drop(["zero", "days_since"], axis=1, inplace=True)
+    df["timestamp"] = pd.to_datetime(df["date_str"] + " " + df["time_str"])
+    df["user_id"] = user_id
     # data is recorded every ~1-5 seconds. Reduce to every minute
-    df_resampled = df.resample('1T', on='timestamp').first().reset_index(drop=True)
-    gdf = gpd.GeoDataFrame(df_resampled, geometry=gpd.points_from_xy(df_resampled.longitude, df_resampled.latitude), crs="EPSG:4326")
+    df_resampled = df.resample("1T", on="timestamp").first().reset_index(drop=True)
+    gdf = gpd.GeoDataFrame(
+        df_resampled,
+        geometry=gpd.points_from_xy(df_resampled.longitude, df_resampled.latitude),
+        crs="EPSG:4326",
+    )
     df_list.append(gdf)
     return None
 
-data_dir = r'C:\Users\andrr\Desktop\geolife\Data'
 
-files = [os.path.join(foldername, filename) for foldername, _, filenames in os.walk(data_dir) for filename in filenames if filename.endswith('.plt')]
+data_dir = r"C:\Users\andrr\Desktop\geolife\Data"
+
+files = [
+    os.path.join(foldername, filename)
+    for foldername, _, filenames in os.walk(data_dir)
+    for filename in filenames
+    if filename.endswith(".plt")
+]
 
 file_map = list()
 
@@ -57,6 +80,6 @@ gdf = gpd.GeoDataFrame(pd.concat(df_list, axis=0, ignore_index=True))
 print(gdf.head())
 print(f"Number of records in the dataset: {len(gdf)}")
 
-out_path = os.path.join(os.path.dirname(data_dir), 'geolife_points.parquet')
+out_path = os.path.join(os.path.dirname(data_dir), "geolife_points.parquet")
 
 gdf.to_parquet(out_path)
