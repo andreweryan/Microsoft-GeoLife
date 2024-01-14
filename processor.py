@@ -1,4 +1,5 @@
 import os
+import gc
 from pathlib import Path
 import numpy as np
 import polars as pl
@@ -12,6 +13,7 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
+gc.enable()
 
 # data dowload: https://download.microsoft.com/download/F/4/8/F4894AA5-FDBC-481E-9285-D5F8C4C4F039/Geolife%20Trajectories%201.3.zip
 
@@ -41,8 +43,8 @@ def process_data(path, df_list):
     df = df.with_columns(
         pl.col("timestamp_str").str.to_datetime().cast(pl.Datetime).alias("timestamp")
     )
-    # data is recorded every ~1-5 seconds. Reduce/downsample to every 10s
 
+    # data is recorded every ~1-5 seconds. Reduce/downsample to every 10s
     df = (
         df.set_sorted("timestamp")
         .group_by_dynamic("timestamp", every="10s")
@@ -84,12 +86,13 @@ with tqdm(total=len(files), desc="Processing Data", unit="file") as progress_bar
         for _ in as_completed(futures):
             progress_bar.update(1)
 
-pl_df = pl.concat(df_list)
+df = pl.concat(df_list)
 gdf = gpd.GeoDataFrame(
-    pl_df.to_pandas(),
-    geometry=gpd.points_from_xy(pl_df["longitude"], pl_df["latitude"]),
+    df.to_pandas(),
+    geometry=gpd.points_from_xy(df["longitude"], df["latitude"]),
     crs="EPSG:4326",
 )
+df = None
 print(f"Number of records in the dataset: {len(gdf)}")
 print(gdf.head())
 
