@@ -1,1 +1,1 @@
-# Microsoft-GeoLife
+# Microsoft-GeoLife: Refreshing work from M.S. on urban analytics with the Microsoft GeoLife dataset
