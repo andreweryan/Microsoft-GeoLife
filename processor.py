@@ -44,10 +44,10 @@ def process_data(path, df_list):
         pl.col("timestamp_str").str.to_datetime().cast(pl.Datetime).alias("timestamp")
     )
 
-    # data is recorded every ~1-5 seconds. Reduce/downsample to every 10s
+    """data is recorded every ~1-5 seconds. Reduce/downsample to every 10s"""
     df = (
         df.set_sorted("timestamp")
-        .group_by_dynamic("timestamp", every="10s")
+        .group_by_dynamic("timestamp", every="1m")
         .agg(pl.col(pl.Float64).mean())
     )
 
@@ -75,16 +75,16 @@ files = [
 
 df_list = list()
 
-# with tqdm(total=len(files), desc="Processing Data", unit="file") as progress_bar:
-#     for file in files:
-#         process_data(file, df_list)
-#         progress_bar.update(1)
-
 with tqdm(total=len(files), desc="Processing Data", unit="file") as progress_bar:
-    with ThreadPoolExecutor(max_workers=None) as executor:
-        futures = {executor.submit(process_data, file, df_list): file for file in files}
-        for _ in as_completed(futures):
-            progress_bar.update(1)
+    for file in files:
+        process_data(file, df_list)
+        progress_bar.update(1)
+
+# with tqdm(total=len(files), desc="Processing Data", unit="file") as progress_bar:
+#     with ThreadPoolExecutor(max_workers=None) as executor:
+#         futures = {executor.submit(process_data, file, df_list): file for file in files}
+#         for _ in as_completed(futures):
+#             progress_bar.update(1)
 
 df = pl.concat(df_list)
 gdf = gpd.GeoDataFrame(
