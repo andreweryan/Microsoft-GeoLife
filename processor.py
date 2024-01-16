@@ -47,15 +47,23 @@ def process_data(path, df_list):
     """data is recorded every ~1-5 seconds. Reduce/downsample to every 10s"""
     df = (
         df.set_sorted("timestamp")
-        .group_by_dynamic("timestamp", every="1m")
+        .group_by_dynamic("timestamp", every="10s")
         .agg(pl.col(pl.Float64).mean())
     )
+
+    df = df.with_columns(pl.col("timestamp").shift().alias("end_time"))
+
+    df = df.with_columns(pl.col("latitude").shift().alias("end_latitude"))
+
+    df = df.with_columns(pl.col("longitude").shift().alias("end_longitude"))
+
+    df = df.drop_nulls()
 
     user_id = extract_user_id(path)
 
     df = df.with_columns(pl.lit(user_id).alias("user_id"))
 
-    df.drop(["date_str", "time_str"])
+    df.drop(["altitude", "date_str", "time_str"])
 
     df_list.append(df)
 
