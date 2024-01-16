@@ -9,7 +9,7 @@ from tqdm import tqdm
 import geopandas as gpd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from geodist.haversine import (
+from haversine.haversine import (
     haversine_distance,
 )  # https://github.com/andreweryan/geodist
 
