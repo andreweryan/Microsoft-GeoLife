@@ -28,7 +28,7 @@ def extract_user_id(data_path):
     return int(Path(data_path).parts[-3])
 
 
-def process_data(path, df_list):
+def process_data(path, df_list, resample="1m"):
     df = pl.read_csv(
         path,
         skip_rows=6,
@@ -45,21 +45,25 @@ def process_data(path, df_list):
     )
 
     df = df.with_columns(
-        pl.col("timestamp_str").str.to_datetime().cast(pl.Datetime).alias("timestamp")
+        pl.col("timestamp_str").str.to_datetime().cast(pl.Datetime).alias("start_time")
     )
 
     """data is recorded every ~1-5 seconds. Reduce/downsample to every 10s"""
     df = (
-        df.set_sorted("timestamp")
-        .group_by_dynamic("timestamp", every="10s")
+        df.set_sorted("start_time")
+        .group_by_dynamic("start_time", every=resample)
         .agg(pl.col(pl.Float64).mean())
     )
 
-    df = df.with_columns(pl.col("timestamp").shift().alias("end_time"))
+    df = df.drop(["altitude", "date_str", "time_str"])
 
-    df = df.with_columns(pl.col("latitude").shift().alias("end_latitude"))
+    df = df.with_columns(pl.col("start_time").shift(-1).alias("end_time"))
 
-    df = df.with_columns(pl.col("longitude").shift().alias("end_longitude"))
+    df = df.with_columns(pl.col("latitude").shift(-1).alias("end_latitude"))
+
+    df = df.with_columns(pl.col("longitude").shift(-1).alias("end_longitude"))
+
+    df = df.drop_nulls()
 
     df = df.with_columns(
         pl.struct(["latitude", "longitude", "end_latitude", "end_longitude"])
@@ -70,18 +74,20 @@ def process_data(path, df_list):
                 x["end_latitude"],
                 x["end_longitude"],
                 "meters",
-            )
+            ),
+            return_dtype=pl.Float64,
         )
         .alias("distance_meters")
     )
 
-    df = df.drop_nulls()
+    df = df.with_columns(
+        pl.col(["start_time", "end_time"]),
+        delta=pl.col("end_time").sub(pl.col("start_time")),
+    )
 
     user_id = extract_user_id(path)
 
     df = df.with_columns(pl.lit(user_id).alias("user_id"))
-
-    df.drop(["altitude", "date_str", "time_str"])
 
     df_list.append(df)
 
@@ -103,7 +109,7 @@ df_list = list()
 
 with tqdm(total=len(files), desc="Processing Data", unit="file") as progress_bar:
     for file in files:
-        process_data(file, df_list)
+        process_data(file, df_list, resample="1m")
         progress_bar.update(1)
 
 # with tqdm(total=len(files), desc="Processing Data", unit="file") as progress_bar:
