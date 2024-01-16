@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from haversine.haversine import (
     haversine_distance,
-)  # https://github.com/andreweryan/geodist
+)  # https://github.com/andreweryan/haversine
 
 import warnings
 
