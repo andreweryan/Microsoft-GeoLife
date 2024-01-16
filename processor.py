@@ -9,6 +9,10 @@ from tqdm import tqdm
 import geopandas as gpd
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from geodist.haversine import (
+    haversine_distance,
+)  # https://github.com/andreweryan/geodist
+
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -56,6 +60,20 @@ def process_data(path, df_list):
     df = df.with_columns(pl.col("latitude").shift().alias("end_latitude"))
 
     df = df.with_columns(pl.col("longitude").shift().alias("end_longitude"))
+
+    df = df.with_columns(
+        pl.struct(["latitude", "longitude", "end_latitude", "end_longitude"])
+        .map_elements(
+            lambda x: haversine_distance(
+                x["latitude"],
+                x["longitude"],
+                x["end_latitude"],
+                x["end_longitude"],
+                "meters",
+            )
+        )
+        .alias("distance_meters")
+    )
 
     df = df.drop_nulls()
 
