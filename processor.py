@@ -28,7 +28,7 @@ def extract_user_id(data_path):
     return int(Path(data_path).parts[-3])
 
 
-def process_data(path, df_list, resample="5m"):
+def process_data(path, df_list, resample="1m"):
     df = pl.read_csv(
         path,
         skip_rows=6,
@@ -82,7 +82,9 @@ def process_data(path, df_list, resample="5m"):
 
     df = df.with_columns(
         pl.col(["start_time", "end_time"]),
-        delta=pl.col("end_time").sub(pl.col("start_time")),
+        delta=((pl.col("end_time").sub(pl.col("start_time")) / 1000000) / 60).alias(
+            "time_delta_min"
+        ),
     )
 
     user_id = extract_user_id(path)
@@ -109,7 +111,7 @@ df_list = list()
 
 with tqdm(total=len(files), desc="Processing Data", unit="file") as progress_bar:
     for file in files:
-        process_data(file, df_list, resample="1m")
+        process_data(file, df_list, resample="5m")
         progress_bar.update(1)
 
 # with tqdm(total=len(files), desc="Processing Data", unit="file") as progress_bar:
