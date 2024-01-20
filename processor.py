@@ -28,7 +28,7 @@ def extract_user_id(data_path):
     return int(Path(data_path).parts[-3])
 
 
-def process_data(path, df_list, resample="1m"):
+def process_data(path, df_list, resample="5m"):
     df = pl.read_csv(
         path,
         skip_rows=6,
@@ -96,7 +96,7 @@ def process_data(path, df_list, resample="1m"):
     return None
 
 
-data_dir = r"C:\Users\andrr\Desktop\geolife\Data"
+data_dir = r"C:\Projects\data\geolife\Data"
 
 files = [
     os.path.join(foldername, filename)
