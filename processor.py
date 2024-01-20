@@ -1,9 +1,8 @@
 import os
 import gc
 from pathlib import Path
-import numpy as np
 import polars as pl
-import pandas as pd
+from glob import glob
 from datetime import datetime
 from tqdm import tqdm
 import geopandas as gpd
@@ -28,12 +27,17 @@ def extract_user_id(data_path):
     return int(Path(data_path).parts[-3])
 
 
+# scan scv to load all files at once:
+# files = glob(r'C:\Projects\data\geolife\Data\*\*\*.plt')
+# df = pl.scan_csv(files, skip_rows=6, new_columns=["latitude", "longitude", "zero", "altitude", "epoch", "date_str", "time_str"], dtypes={"latitude": pl.Float64, "longitude": pl.Float64, "zero": pl.Int8, "altitude": pl.Float64, "epoch": pl.Float64, "date_str": pl.String, "time_str": pl.String})
+
+
 def process_data(path, df_list, resample="1m"):
     df = pl.read_csv(
         path,
         skip_rows=6,
-        columns=[0, 1, 3, 5, 6],
-        new_columns=["latitude", "longitude", "altitude", "date_str", "time_str"],
+        columns=[0, 1, 5, 6],
+        new_columns=["latitude", "longitude", "date_str", "time_str"],
         dtypes=[pl.Float64, pl.Float64, pl.Float64, pl.String, pl.String],
         rechunk=True,
     )
@@ -49,15 +53,17 @@ def process_data(path, df_list, resample="1m"):
         pl.col("timestamp_str").str.to_datetime().cast(pl.Datetime).alias("start_time")
     )
 
+    df = df.sort(pl.col("start_time"), descending=False)
+
     df = (
         df.set_sorted("start_time")
         .group_by_dynamic(
             "start_time", every=resample
-        )  # data is recorded every ~1-5 seconds. Reduce/downsample to every 10s
+        )  # data is recorded every ~1-5 seconds.
         .agg(pl.col(pl.Float64).mean())
     )
 
-    df = df.drop(["altitude", "date_str", "time_str"])
+    df = df.drop(["date_str", "time_str"])
 
     df = df.with_columns(pl.col("start_time").shift(-1).alias("end_time"))
 
@@ -93,6 +99,13 @@ def process_data(path, df_list, resample="1m"):
         (pl.col("distance_kilometers") / pl.col("time_delta_hr")).alias("speed_kmh")
     )
 
+    df = df.filter(
+        (pl.col("time_delta_hr") == 0.025)
+        & (pl.col("distance_kilometers") > 0.25)
+        & (pl.col("distance_kilometers") < 1.98)
+        & (pl.col("speed_kmh") < 80)
+    )
+
     user_id = extract_user_id(path)
 
     df = df.with_columns(pl.lit(user_id).alias("user_id"))
@@ -115,16 +128,19 @@ files = [
 
 df_list = list()
 
-with tqdm(total=len(files), desc="Processing Data", unit="file") as progress_bar:
-    for file in files:
-        process_data(file, df_list, resample="5m")
-        progress_bar.update(1)
-
 # with tqdm(total=len(files), desc="Processing Data", unit="file") as progress_bar:
-#     with ThreadPoolExecutor(max_workers=None) as executor:
-#         futures = {executor.submit(process_data, file, df_list): file for file in files}
-#         for _ in as_completed(futures):
-#             progress_bar.update(1)
+#     for file in files:
+#         process_data(file, df_list, resample="1m")
+#         progress_bar.update(1)
+
+with tqdm(total=len(files), desc="Processing Data", unit="file") as progress_bar:
+    with ThreadPoolExecutor(max_workers=None) as executor:
+        futures = {
+            executor.submit(process_data, file, df_list, resample="90s"): file
+            for file in files
+        }
+        for _ in as_completed(futures):
+            progress_bar.update(1)
 
 df = pl.concat(df_list)
 gdf = gpd.GeoDataFrame(
