@@ -71,6 +71,9 @@ def process_data(path, df_list, resample="1m"):
 
     df = df.with_columns(pl.col("longitude").shift(-1).alias("end_longitude"))
 
+    # df = df.sort(['user_id', 'start_time'])
+    # df = df.with_columns(pl.col(["start_time", "latitude", "longitude"]).shift(-1).over("user_id").name.prefix("end_"))
+
     df = df.drop_nulls()
 
     df = df.with_columns(
