@@ -35,6 +35,7 @@ def process_data(path, df_list, resample="1m"):
         columns=[0, 1, 3, 5, 6],
         new_columns=["latitude", "longitude", "altitude", "date_str", "time_str"],
         dtypes=[pl.Float64, pl.Float64, pl.Float64, pl.String, pl.String],
+        rechunk=True,
     )
 
     df = df.with_columns(
@@ -48,10 +49,11 @@ def process_data(path, df_list, resample="1m"):
         pl.col("timestamp_str").str.to_datetime().cast(pl.Datetime).alias("start_time")
     )
 
-    """data is recorded every ~1-5 seconds. Reduce/downsample to every 10s"""
     df = (
         df.set_sorted("start_time")
-        .group_by_dynamic("start_time", every=resample)
+        .group_by_dynamic(
+            "start_time", every=resample
+        )  # data is recorded every ~1-5 seconds. Reduce/downsample to every 10s
         .agg(pl.col(pl.Float64).mean())
     )
 
@@ -73,18 +75,22 @@ def process_data(path, df_list, resample="1m"):
                 x["longitude"],
                 x["end_latitude"],
                 x["end_longitude"],
-                "meters",
+                "kilometers",
             ),
             return_dtype=pl.Float64,
         )
-        .alias("distance_meters")
+        .alias("distance_kilometers")
     )
 
     df = df.with_columns(
         pl.col(["start_time", "end_time"]),
-        delta=((pl.col("end_time").sub(pl.col("start_time")) / 1000000) / 60).alias(
-            "time_delta_min"
-        ),
+        delta=((pl.col("end_time").sub(pl.col("start_time")) / 1000000) / 3600),
+    )
+
+    df = df.rename({"delta": "time_delta_hr"})
+
+    df = df.with_columns(
+        (pl.col("distance_kilometers") / pl.col("time_delta_hr")).alias("speed_kmh")
     )
 
     user_id = extract_user_id(path)
