@@ -81,3 +81,24 @@ gdf_filtered.head()
 # edges['v'] = edges['node_end']
 # edges['k'] = 0
 # edges.set_index(['u','v','k'], inplace=True)
+
+
+# # Obtain frequency of edges to set directed edge weights
+# c = Counter(g.edges())  # Contains frequencies of each directed edge.
+
+# minLineWidth = 0.5 # Set minimum line width to scale edge widths
+
+# for u, v, d in g.edges(data=True):
+#     d['weight'] = c[u, v]*minLineWidth
+# edges,weights = zip(*nx.get_edge_attributes(g,'weight').items())
+# weightlist = (list(g.edges(data=True)))
+
+# # Save edge weights to file
+# edgeweight = pd.DataFrame(weightlist)
+# #print edgeweight
+# header=['cluster_from','cluster_to','weight']
+# edgeweight.to_csv('G:\Projects\Data\dmv_tweets_march_10d_merged_edges_weights.csv', index=False, header=header)
+# Plotting with matplotlib
+# nx.draw_networkx_nodes(g,pos=dict_pos,with_labels=True,node_size=25,node_color='black',alpha=.25)
+# nx.draw_networkx_edges(g,pos=dict_pos,arrows=False,width=[d['weight'] for u,v, d in g.edges(data=True)], edge_color=colorList)
+# plt.show()
