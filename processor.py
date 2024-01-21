@@ -97,7 +97,9 @@ def process_data(path, resample="1m"):
         (pl.col("distance_kilometers") / pl.col("time_delta_hr")).alias("speed_kmh")
     )
 
-    if resample == "30s":
+    if resample == "15s":
+        time_lim = 0.25 / 60
+    elif resample == "30s":
         time_lim = 0.5 / 60
     elif resample == "90s":
         time_lim = 1.5 / 60
@@ -107,7 +109,7 @@ def process_data(path, resample="1m"):
         time_lim = 5 / 60
     else:
         raise ValueError(
-            "Selected resample was not implemented. Select from: 30s, 90s, 1min, 5min"
+            "Selected resample was not implemented. Select from: 15s, 30s, 90s, 1min, 5min"
         )
 
     df = df.filter(
@@ -136,12 +138,14 @@ if __name__ == "__main__":
 
     files = glob(r"C:\Projects\data\geolife\Data\*\*\*.plt")
 
+    resample = "30s"
+
     df_list = list()
 
     with tqdm(total=len(files), desc="Processing Data", unit="file") as progress_bar:
         with ProcessPoolExecutor(max_workers=None) as executor:
             futures = {
-                executor.submit(process_data, file, resample="30s"): file
+                executor.submit(process_data, file, resample=resample): file
                 for file in files
             }
             for future in as_completed(futures):
@@ -159,7 +163,9 @@ if __name__ == "__main__":
     print(f"Number of records in the dataset: {len(gdf)}")
     print(gdf.head())
 
-    out_path = os.path.join(os.path.dirname(data_dir), "geolife_points.parquet")
+    out_path = os.path.join(
+        os.path.dirname(data_dir), f"geolife_points_{resample}.parquet"
+    )
     gdf.to_parquet(out_path)
 
     # process trip points to lines/trajectories
@@ -169,7 +175,9 @@ if __name__ == "__main__":
     gdf.set_geometry("geometry", inplace=True)
     gdf.set_crs("EPSG:4326", inplace=True)
 
-    out_path = os.path.join(os.path.dirname(data_dir), "geolife_lines.parquet")
+    out_path = os.path.join(
+        os.path.dirname(data_dir), f"geolife_lines_{resample}.parquet"
+    )
     gdf.to_parquet(out_path)
 
     end = datetime.now()
