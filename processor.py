@@ -6,6 +6,7 @@ from glob import glob
 from datetime import datetime
 from tqdm import tqdm
 import geopandas as gpd
+from shapely.geometry import LineString
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from haversine.haversine import (
@@ -111,12 +112,21 @@ def process_data(path, resample="1m"):
 
     df = df.filter(
         (pl.col("time_delta_hr") == time_lim)
-        & (pl.col("distance_kilometers") > 0.25)
-        & (pl.col("distance_kilometers") < 1.98)
-        & (pl.col("speed_kmh") < 80)
+        & (pl.col("distance_kilometers") > 0.2)
+        & (pl.col("distance_kilometers") < 2)
+        & (pl.col("speed_kmh") <= 80)
     )
 
     return df
+
+
+def trip_to_line(row):
+    return LineString(
+        [
+            [row["longitude"], row["latitude"]],
+            [row["end_longitude"], row["end_latitude"]],
+        ]
+    )
 
 
 if __name__ == "__main__":
@@ -131,7 +141,7 @@ if __name__ == "__main__":
     with tqdm(total=len(files), desc="Processing Data", unit="file") as progress_bar:
         with ProcessPoolExecutor(max_workers=None) as executor:
             futures = {
-                executor.submit(process_data, file, resample="1m"): file
+                executor.submit(process_data, file, resample="30s"): file
                 for file in files
             }
             for future in as_completed(futures):
@@ -150,7 +160,16 @@ if __name__ == "__main__":
     print(gdf.head())
 
     out_path = os.path.join(os.path.dirname(data_dir), "geolife_points.parquet")
+    gdf.to_parquet(out_path)
 
+    # process trip points to lines/trajectories
+    gdf["line_geom"] = gdf.apply(lambda row: trip_to_line(row), axis=1)
+    gdf.drop("geometry", axis=1, inplace=True)
+    gdf.rename(columns={"line_geom": "geometry"}, inplace=True)
+    gdf.set_geometry("geometry", inplace=True)
+    gdf.set_crs("EPSG:4326", inplace=True)
+
+    out_path = os.path.join(os.path.dirname(data_dir), "geolife_lines.parquet")
     gdf.to_parquet(out_path)
 
     end = datetime.now()
