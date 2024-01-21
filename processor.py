@@ -6,7 +6,7 @@ from glob import glob
 from datetime import datetime
 from tqdm import tqdm
 import geopandas as gpd
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 from haversine.haversine import (
     haversine_distance,
@@ -20,25 +20,18 @@ gc.enable()
 
 # data dowload: https://download.microsoft.com/download/F/4/8/F4894AA5-FDBC-481E-9285-D5F8C4C4F039/Geolife%20Trajectories%201.3.zip
 
-start = datetime.now()
-
 
 def extract_user_id(data_path):
     return int(Path(data_path).parts[-3])
 
 
-# scan scv to load all files at once:
-# files = glob(r'C:\Projects\data\geolife\Data\*\*\*.plt')
-# df = pl.scan_csv(files, skip_rows=6, new_columns=["latitude", "longitude", "zero", "altitude", "epoch", "date_str", "time_str"], dtypes={"latitude": pl.Float64, "longitude": pl.Float64, "zero": pl.Int8, "altitude": pl.Float64, "epoch": pl.Float64, "date_str": pl.String, "time_str": pl.String})
-
-
-def process_data(path, df_list, resample="1m"):
+def process_data(path, resample="1m"):
     df = pl.read_csv(
         path,
         skip_rows=6,
         columns=[0, 1, 5, 6],
         new_columns=["latitude", "longitude", "date_str", "time_str"],
-        dtypes=[pl.Float64, pl.Float64, pl.Float64, pl.String, pl.String],
+        dtypes=[pl.Float64, pl.Float64, pl.String, pl.String],
         rechunk=True,
     )
 
@@ -50,29 +43,30 @@ def process_data(path, df_list, resample="1m"):
     )
 
     df = df.with_columns(
-        pl.col("timestamp_str").str.to_datetime().cast(pl.Datetime).alias("start_time")
+        pl.col("timestamp_str").str.to_datetime().cast(pl.Datetime).alias("timestamp")
     )
 
-    df = df.sort(pl.col("start_time"), descending=False)
+    df = df.sort(pl.col("timestamp"), descending=False)
 
     df = (
-        df.set_sorted("start_time")
+        df.set_sorted("timestamp")
         .group_by_dynamic(
-            "start_time", every=resample
+            "timestamp", every=resample
         )  # data is recorded every ~1-5 seconds.
         .agg(pl.col(pl.Float64).mean())
     )
 
     df = df.drop(["date_str", "time_str"])
 
-    df = df.with_columns(pl.col("start_time").shift(-1).alias("end_time"))
-
-    df = df.with_columns(pl.col("latitude").shift(-1).alias("end_latitude"))
-
-    df = df.with_columns(pl.col("longitude").shift(-1).alias("end_longitude"))
-
-    # df = df.sort(['user_id', 'start_time'])
-    # df = df.with_columns(pl.col(["start_time", "latitude", "longitude"]).shift(-1).over("user_id").name.prefix("end_"))
+    user_id = extract_user_id(path)
+    df = df.with_columns(pl.lit(user_id).alias("user_id"))
+    df = df.sort(["user_id", "timestamp"])
+    df = df.with_columns(
+        pl.col(["timestamp", "latitude", "longitude"])
+        .shift(-1)
+        .over("user_id")
+        .name.prefix("end_")
+    )
 
     df = df.drop_nulls()
 
@@ -92,8 +86,8 @@ def process_data(path, df_list, resample="1m"):
     )
 
     df = df.with_columns(
-        pl.col(["start_time", "end_time"]),
-        delta=((pl.col("end_time").sub(pl.col("start_time")) / 1000000) / 3600),
+        pl.col(["timestamp", "end_timestamp"]),
+        delta=((pl.col("end_timestamp").sub(pl.col("timestamp")) / 1000000) / 3600),
     )
 
     df = df.rename({"delta": "time_delta_hr"})
@@ -102,62 +96,62 @@ def process_data(path, df_list, resample="1m"):
         (pl.col("distance_kilometers") / pl.col("time_delta_hr")).alias("speed_kmh")
     )
 
+    if resample == "30s":
+        time_lim = 0.5 / 60
+    elif resample == "90s":
+        time_lim = 1.5 / 60
+    elif resample == "1m":
+        time_lim = 1 / 60
+    elif resample == "5m":
+        time_lim = 5 / 60
+    else:
+        raise ValueError(
+            "Selected resample was not implemented. Select from: 30s, 90s, 1min, 5min"
+        )
+
     df = df.filter(
-        (pl.col("time_delta_hr") == 0.025)
+        (pl.col("time_delta_hr") == time_lim)
         & (pl.col("distance_kilometers") > 0.25)
         & (pl.col("distance_kilometers") < 1.98)
         & (pl.col("speed_kmh") < 80)
     )
 
-    user_id = extract_user_id(path)
+    return df
 
-    df = df.with_columns(pl.lit(user_id).alias("user_id"))
 
-    df_list.append(df)
+if __name__ == "__main__":
+    start = datetime.now()
 
+    data_dir = r"C:\Projects\data\geolife\Data"
+
+    files = glob(r"C:\Projects\data\geolife\Data\*\*\*.plt")
+
+    df_list = list()
+
+    with tqdm(total=len(files), desc="Processing Data", unit="file") as progress_bar:
+        with ProcessPoolExecutor(max_workers=None) as executor:
+            futures = {
+                executor.submit(process_data, file, resample="1m"): file
+                for file in files
+            }
+            for future in as_completed(futures):
+                result = future.result()
+                df_list.append(result)
+                progress_bar.update(1)
+
+    df = pl.concat(df_list)
+    gdf = gpd.GeoDataFrame(
+        df.to_pandas(),
+        geometry=gpd.points_from_xy(df["longitude"], df["latitude"]),
+        crs="EPSG:4326",
+    )
     df = None
+    print(f"Number of records in the dataset: {len(gdf)}")
+    print(gdf.head())
 
-    return None
+    out_path = os.path.join(os.path.dirname(data_dir), "geolife_points.parquet")
 
+    gdf.to_parquet(out_path)
 
-data_dir = r"C:\Projects\data\geolife\Data"
-
-files = [
-    os.path.join(foldername, filename)
-    for foldername, _, filenames in os.walk(data_dir)
-    for filename in filenames
-    if filename.endswith(".plt")
-]
-
-df_list = list()
-
-# with tqdm(total=len(files), desc="Processing Data", unit="file") as progress_bar:
-#     for file in files:
-#         process_data(file, df_list, resample="1m")
-#         progress_bar.update(1)
-
-with tqdm(total=len(files), desc="Processing Data", unit="file") as progress_bar:
-    with ThreadPoolExecutor(max_workers=None) as executor:
-        futures = {
-            executor.submit(process_data, file, df_list, resample="90s"): file
-            for file in files
-        }
-        for _ in as_completed(futures):
-            progress_bar.update(1)
-
-df = pl.concat(df_list)
-gdf = gpd.GeoDataFrame(
-    df.to_pandas(),
-    geometry=gpd.points_from_xy(df["longitude"], df["latitude"]),
-    crs="EPSG:4326",
-)
-df = None
-print(f"Number of records in the dataset: {len(gdf)}")
-print(gdf.head())
-
-out_path = os.path.join(os.path.dirname(data_dir), "geolife_points.parquet")
-
-gdf.to_parquet(out_path)
-
-end = datetime.now()
-print(f"Total processing time: {end - start}")
+    end = datetime.now()
+    print(f"Total processing time: {end - start}")
