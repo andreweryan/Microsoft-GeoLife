@@ -116,7 +116,8 @@ def process_data(path, resample="1m"):
         (pl.col("time_delta_hr") == time_lim)
         & (pl.col("distance_kilometers") > 0.2)
         & (pl.col("distance_kilometers") < 2)
-        & (pl.col("speed_kmh") <= 80)
+        & (pl.col("speed_kmh") >= 32)
+        & (pl.col("speed_kmh") <= 100)
     )
 
     return df
