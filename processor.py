@@ -22,11 +22,26 @@ gc.enable()
 # data dowload: https://download.microsoft.com/download/F/4/8/F4894AA5-FDBC-481E-9285-D5F8C4C4F039/Geolife%20Trajectories%201.3.zip
 
 
-def extract_user_id(data_path):
+def extract_user_id(data_path: str):
+    """Extracts the GeoLife user_id from the source data path.
+
+    Args:
+        data_path (str): Path to GeoLife plt file
+    Returns:
+        user_id (int): GeoLife user_id
+    """
     return int(Path(data_path).parts[-3])
 
 
-def process_data(path, resample="1m"):
+def process_data(path: str, resample: str = "30s") -> pl.DataFrame:
+    """Process GeoLife plt file
+
+    Args:
+        path (str): Path to GeoLife plt file
+        resample (str): Rate to resample data timestamp by, Default='30s', accepts: '15s' (15 seconds), '30s' (30 seconds), '90s' (90 seconds), '1m' (1 minute), '5m' (5 minutes)
+    Returns:
+        df (pl.DataFrame): Processed polars DataFrame
+    """
     df = pl.read_csv(
         path,
         skip_rows=6,
@@ -124,12 +139,19 @@ def process_data(path, resample="1m"):
 
 
 def trip_to_line(row):
-    return LineString(
+    """
+    Args:
+        row (pd.Series): GeoDataFrame row
+    Return:
+        line_geom (LineString):
+    """
+    line_geom = LineString(
         [
             [row["longitude"], row["latitude"]],
             [row["end_longitude"], row["end_latitude"]],
         ]
     )
+    return line_geom
 
 
 if __name__ == "__main__":
