@@ -8,7 +8,7 @@ Merging all the data together into a single Polars DataFrame with minimal prepro
 
 Dumping the full dataset of points and lines to a GeoPandas GeoDataFrame for exporting Parquet/GeoParquet takes significantly longer, approximately 15 minutes total, with each file being ~1.7-1.8GB each.
 This is a process that was done once for testing purposes. Subsequent reprocesing of the data with additional filtering/preprocessing (e.g., temporal resampling, trajectory/trip heuristics, etc.) is significantly
-faster as the data is drastically reduced dependending on filters. 
+faster, about 1 minute total, as the data is drastically reduced dependending on filters. 
 
 ![Full points around Beijing](assets/geolife_dataset_points_full.png)
 ![Full trips/trajecroties around Beijing](assets/geolife_dataset_lines_full.png)

@@ -146,7 +146,7 @@ if __name__ == "__main__":
 
     files = glob(r"C:\Projects\data\geolife\Data\*\*\*.plt")
 
-    resample = "30s"
+    resample = None  # "30s"
 
     df_list = list()
 
