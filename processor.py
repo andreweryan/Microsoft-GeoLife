@@ -112,26 +112,24 @@ def process_data(path: str, resample: str = "30s") -> pl.DataFrame:
         (pl.col("distance_kilometers") / pl.col("time_delta_hr")).alias("speed_kmh")
     )
 
-    if resample == "15s":
-        time_lim = 0.25 / 60
-    elif resample == "30s":
-        time_lim = 0.5 / 60
-    elif resample == "90s":
-        time_lim = 1.5 / 60
-    elif resample == "1m":
-        time_lim = 1 / 60
-    elif resample == "5m":
-        time_lim = 5 / 60
-    else:
-        raise ValueError(
-            "Selected resample was not implemented. Select from: 15s, 30s, 90s, 1min, 5min"
-        )
+    # if resample == "15s":
+    #     time_lim = 0.25 / 60
+    # elif resample == "30s":
+    #     time_lim = 0.5 / 60
+    # elif resample == "90s":
+    #     time_lim = 1.5 / 60
+    # elif resample == "1m":
+    #     time_lim = 1 / 60
+    # elif resample == "5m":
+    #     time_lim = 5 / 60
+    # else:
+    #     raise ValueError(
+    #         "Selected resample was not implemented. Select from: 15s, 30s, 90s, 1min, 5min"
+    #     )
 
     df = df.filter(
-        (pl.col("time_delta_hr") == time_lim)
-        & (pl.col("distance_kilometers") > 0.2)
-        & (pl.col("distance_kilometers") < 2)
-        & (pl.col("speed_kmh") >= 32)
+        (pl.col("distance_kilometers") < 2)
+        & (pl.col("speed_kmh") >= 5)
         & (pl.col("speed_kmh") <= 100)
     )
 
@@ -187,7 +185,9 @@ if __name__ == "__main__":
     print(gdf.head())
 
     out_path = os.path.join(
-        os.path.dirname(data_dir), f"geolife_points_{resample}.parquet"
+        os.path.dirname(data_dir),
+        f"geolife_points_{resample}.parquet"
+        # os.path.dirname(data_dir), f"geolife_points_full.parquet"
     )
     gdf.to_parquet(out_path)
 
@@ -199,7 +199,9 @@ if __name__ == "__main__":
     gdf.set_crs("EPSG:4326", inplace=True)
 
     out_path = os.path.join(
-        os.path.dirname(data_dir), f"geolife_lines_{resample}.parquet"
+        os.path.dirname(data_dir),
+        f"geolife_lines_{resample}.parquet"
+        # os.path.dirname(data_dir), f"geolife_lines_full.parquet"
     )
     gdf.to_parquet(out_path)
 
