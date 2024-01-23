@@ -128,7 +128,8 @@ def process_data(path: str, resample: str = "30s") -> pl.DataFrame:
     #     )
 
     df = df.filter(
-        (pl.col("distance_kilometers") < 2)
+        (pl.col("distance_kilometers") > 0.05)
+        & (pl.col("distance_kilometers") < 2)
         & (pl.col("speed_kmh") >= 5)
         & (pl.col("speed_kmh") <= 100)
     )
