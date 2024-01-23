@@ -33,12 +33,12 @@ def extract_user_id(data_path: str):
     return int(Path(data_path).parts[-3])
 
 
-def process_data(path: str, resample: str = "30s") -> pl.DataFrame:
+def process_data(path: str, resample: str = "10s") -> pl.DataFrame:
     """Process GeoLife plt file
 
     Args:
         path (str): Path to GeoLife plt file
-        resample (str): Rate to resample data timestamp by, Default='30s', accepts: '15s' (15 seconds), '30s' (30 seconds), '90s' (90 seconds), '1m' (1 minute), '5m' (5 minutes)
+        resample (str): Rate to resample data timestamp by, Default='10s'
     Returns:
         df (pl.DataFrame): Processed polars DataFrame
     """
@@ -64,13 +64,14 @@ def process_data(path: str, resample: str = "30s") -> pl.DataFrame:
 
     df = df.sort(pl.col("timestamp"), descending=False)
 
-    df = (
-        df.set_sorted("timestamp")
-        .group_by_dynamic(
-            "timestamp", every=resample
-        )  # data is recorded every ~1-5 seconds.
-        .agg(pl.col(pl.Float64).mean())
-    )
+    if resample:
+        df = (
+            df.set_sorted("timestamp")
+            .group_by_dynamic(
+                "timestamp", every=resample
+            )  # data is recorded every ~1-5 seconds.
+            .agg(pl.col(pl.Float64).mean())
+        )
 
     df = df.drop(["date_str", "time_str"])
 
@@ -111,21 +112,6 @@ def process_data(path: str, resample: str = "30s") -> pl.DataFrame:
     df = df.with_columns(
         (pl.col("distance_kilometers") / pl.col("time_delta_hr")).alias("speed_kmh")
     )
-
-    # if resample == "15s":
-    #     time_lim = 0.25 / 60
-    # elif resample == "30s":
-    #     time_lim = 0.5 / 60
-    # elif resample == "90s":
-    #     time_lim = 1.5 / 60
-    # elif resample == "1m":
-    #     time_lim = 1 / 60
-    # elif resample == "5m":
-    #     time_lim = 5 / 60
-    # else:
-    #     raise ValueError(
-    #         "Selected resample was not implemented. Select from: 15s, 30s, 90s, 1min, 5min"
-    #     )
 
     df = df.filter(
         (pl.col("distance_kilometers") > 0.05)
@@ -185,11 +171,12 @@ if __name__ == "__main__":
     print(f"Number of records in the dataset: {len(gdf)}")
     print(gdf.head())
 
-    out_path = os.path.join(
-        os.path.dirname(data_dir),
-        f"geolife_points_{resample}.parquet"
-        # os.path.dirname(data_dir), f"geolife_points_full.parquet"
-    )
+    if not resample:
+        out_path = os.path.join(os.path.dirname(data_dir), "geolife_points.parquet")
+    else:
+        out_path = os.path.join(
+            os.path.dirname(data_dir), f"geolife_points_{resample}.parquet"
+        )
     gdf.to_parquet(out_path)
 
     # process trip points to lines/trajectories
@@ -199,11 +186,13 @@ if __name__ == "__main__":
     gdf.set_geometry("geometry", inplace=True)
     gdf.set_crs("EPSG:4326", inplace=True)
 
-    out_path = os.path.join(
-        os.path.dirname(data_dir),
-        f"geolife_lines_{resample}.parquet"
-        # os.path.dirname(data_dir), f"geolife_lines_full.parquet"
-    )
+    if not resample:
+        out_path = os.path.join(os.path.dirname(data_dir), "geolife_lines.parquet")
+    else:
+        out_path = os.path.join(
+            os.path.dirname(data_dir), f"geolife_lines_{resample}.parquet"
+        )
+
     gdf.to_parquet(out_path)
 
     end = datetime.now()
