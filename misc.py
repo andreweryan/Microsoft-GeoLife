@@ -15,45 +15,6 @@ warnings.filterwarnings("ignore")
 
 gc.enable()
 
-
-def make_trajectory(points_df, time_col="timestamp"):
-    """Make trajectory."""
-    points = points_df.sort_values(time_col)
-
-    coords = [(p.x, p.y) for p in points.geometry]
-
-    trajectory = LineString(coords)
-
-    return trajectory
-
-
-gdf = gpd.read_parquet(r"C:\Projects\data\geolife\geolife_points_5min.parquet")
-
-# this code should be in processor during polars transforms
-gdf.sort_values(by=["user_id", "timestamp"], inplace=True)
-gdf["end_time"] = gdf.groupby("user_id")["timestamp"].shift(-1)
-gdf["end_latitude"] = gdf.groupby("user_id")["latitude"].shift(-1)
-gdf["end_longitude"] = gdf.groupby("user_id")["longitude"].shift(-1)
-
-gdf["distance_kilometers"] = gdf.apply(
-    lambda row: haversine_distance(
-        row["latitude"],
-        row["longitude"],
-        row["end_latitude"],
-        row["end_longitude"],
-        unit="kilometers",
-    ),
-    axis=1,
-)
-gdf = gdf[gdf["distance_kilometers"] >= 0.5].copy()
-gdf["time_minutes"] = (gdf["end_time"] - gdf["timestamp"]).dt.total_seconds() / 60
-gdf["time_hours"] = (gdf["end_time"] - gdf["timestamp"]).dt.total_seconds() / 3600
-gdf = gdf[gdf["time_minutes"] >= 5].copy()
-gdf["velocity_kmh"] = gdf["distance_kilometers"] / gdf["time"]
-
-gdf_filtered = gdf[(gdf["velocity_kmh"] >= 10) & (gdf["velocity_kmh"] <= 80)].copy()
-gdf_filtered.head()
-
 # user_ids = np.unique(gdf['user_id'].values)
 
 # gdf['date'] = gdf['timestamp'].dt.date
@@ -81,7 +42,6 @@ gdf_filtered.head()
 # edges['v'] = edges['node_end']
 # edges['k'] = 0
 # edges.set_index(['u','v','k'], inplace=True)
-
 
 # # Obtain frequency of edges to set directed edge weights
 # c = Counter(g.edges())  # Contains frequencies of each directed edge.

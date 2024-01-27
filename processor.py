@@ -22,7 +22,7 @@ gc.enable()
 # data dowload: https://download.microsoft.com/download/F/4/8/F4894AA5-FDBC-481E-9285-D5F8C4C4F039/Geolife%20Trajectories%201.3.zip
 
 
-def extract_user_id(data_path: str):
+def extract_user_id(data_path: str) -> int:
     """Extracts the GeoLife user_id from the source data path.
 
     Args:
@@ -114,16 +114,16 @@ def process_data(path: str, resample: str = "10s") -> pl.DataFrame:
     )
 
     df = df.filter(
-        (pl.col("distance_kilometers") > 0.05)
-        & (pl.col("distance_kilometers") < 2)
-        & (pl.col("speed_kmh") >= 5)
+        # (pl.col("distance_kilometers") > 0.05)
+        # & (pl.col("distance_kilometers") < 2)
+        (pl.col("speed_kmh") >= 5)
         & (pl.col("speed_kmh") <= 100)
     )
 
     return df
 
 
-def trip_to_line(row):
+def trip_to_line(row) -> LineString:
     """
     Args:
         row (pd.Series): GeoDataFrame row
